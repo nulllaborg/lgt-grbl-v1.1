@@ -25,6 +25,8 @@
 #define GRBL_VERSION "1.1h"
 #define GRBL_VERSION_BUILD "20190830"
 
+//#define USER_FLASH 1
+
 // Define standard libraries used by Grbl.
 #include <avr/io.h>
 #include <avr/pgmspace.h>
@@ -37,6 +39,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+#include "lgtx8p.h"
 
 // Define the Grbl system include files. NOTE: Do not alter organization.
 #include "config.h"

@@ -20,9 +20,80 @@
 
 #include "grbl.h"
 
+#define	INT_OSC_32M	1
+#define	EXT_OSC_32M	2
+#define	EXT_OSC_16M	4
 
+#define SYSCLK_DIV_0    0x0
+#define SYSCLK_DIV_2    0x1
+#define SYSCLK_DIV_4    0x2
+
+//#define PMCR	(*((volatile unsigned char *)0xF2))
+//#define PMX2	(*((volatile unsigned char *)0xF0))
+
+void sysClock(uint8_t mode)
+{
+    // enable 32KRC for WDT
+    GPIOR0 = PMCR | 0x10;
+    PMCR = 0x80;
+    PMCR = GPIOR0;
+#ifdef USER_FLASH
+    // disable E2PROM use flash
+    ECCR = 0x80;
+    ECCR = 0x00;
+#else
+    // enable 1KB E2PROM
+    ECCR = 0x80;
+    ECCR = 0x40;
+#endif
+    if (mode == INT_OSC_32M) {
+        // switch to internal crystal
+        GPIOR0 = PMCR & 0x9f;
+        PMCR = 0x80;
+        PMCR = GPIOR0;
+
+        // disable external crystal
+        GPIOR0 = PMCR & 0xf3;
+        PMCR = 0x80;
+        PMCR = GPIOR0;
+
+    } else { // extern OSC
+        PMCR = 0x80;
+        PMCR = 0x97;
+
+        // waiting for crystal stable
+        for(GPIOR0 = 0xff; GPIOR0 > 0; --GPIOR0);
+        for(GPIOR0 = 0xff; GPIOR0 > 0; --GPIOR0);
+
+        // switch to external 400~32MHz crystal
+        PMCR = 0x80;
+        PMCR = 0xb7;
+        for(GPIOR0 = 0xff; GPIOR0 > 0; --GPIOR0);
+        for(GPIOR0 = 0xff; GPIOR0 > 0; --GPIOR0);
+    }
+
+#if defined(F_CPU)
+    CLKPR = 0x80;
+    #if F_CPU == 32000000L
+        #if CLOCK_SOURCE == INT_OSC_32M || CLOCK_SOURCE == EXT_OSC_32M
+            CLKPR = SYSCLK_DIV_0;
+        #else
+            #error "Clock Source Must 32MHz"
+        #endif
+    #elif F_CPU == 16000000L
+        #if CLOCK_SOURCE == INT_OSC_32M || CLOCK_SOURCE == EXT_OSC_32M
+            CLKPR = SYSCLK_DIV_2;
+        #elif CLOCK_SOURCE == EXT_OSC_16M
+            CLKPR = SYSCLK_DIV_0;
+        #else
+            #error "Clock Source Must 16,32MHZ"
+        #endif
+    #endif
+#endif
+}
 void system_init()
 {
+  sysClock(CLOCK_SOURCE);
   CONTROL_DDR &= ~(CONTROL_MASK); // Configure as input pins
   #ifdef DISABLE_CONTROL_PIN_PULL_UP
     CONTROL_PORT &= ~(CONTROL_MASK); // Normal low operation. Requires external pull-down.

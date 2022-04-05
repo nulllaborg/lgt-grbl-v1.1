@@ -24,6 +24,11 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+#ifdef USER_FLASH
+#define FLASH_30K_READ_ADDR 0xB600  // 30k位置用来存放数据 在存储空间的映射地址
+#define FLASH_30k_WRITE_ADDR 0x7800 // 30k在flash中的物理地址
+#endif
+
 /* These EEPROM bits have different names on different devices. */
 #ifndef EEPE
 		#define EEPE  EEWE  //!< EEPROM program/write enable.
@@ -48,10 +53,13 @@
  */
 unsigned char eeprom_get_char( unsigned int addr )
 {
-	do {} while( EECR & (1<<EEPE) ); // Wait for completion of previous write.
-	EEAR = addr; // Set EEPROM address register.
-	EECR = (1<<EERE); // Start EEPROM read operation.
-	return EEDR; // Return the byte read from EEPROM.
+    EEARH = addr >> 8; // Set EEPROM address register.
+    EEARL = addr & 0xff;
+    EECR |= (1 << EERE); // Start EEPROM read operation.
+
+    asm __volatile__ ("nop");
+    asm __volatile__ ("nop");
+    return EEDR; // Return the byte read from EEPROM.
 }
 
 /*! \brief  Write byte to EEPROM.
@@ -73,79 +81,159 @@ unsigned char eeprom_get_char( unsigned int addr )
  */
 void eeprom_put_char( unsigned int addr, unsigned char new_value )
 {
-	char old_value; // Old EEPROM value.
-	char diff_mask; // Difference mask, i.e. old value XOR new value.
+    uint8_t	__bk_sreg = SREG;
 
-	cli(); // Ensure atomic operation for the write operation.
-	
-	do {} while( EECR & (1<<EEPE) ); // Wait for completion of previous write.
-	#ifndef EEPROM_IGNORE_SELFPROG
-	do {} while( SPMCSR & (1<<SELFPRGEN) ); // Wait for completion of SPM.
-	#endif
-	
-	EEAR = addr; // Set EEPROM address register.
-	EECR = (1<<EERE); // Start EEPROM read operation.
-	old_value = EEDR; // Get old EEPROM value.
-	diff_mask = old_value ^ new_value; // Get bit differences.
-	
-	// Check if any bits are changed to '1' in the new value.
-	if( diff_mask & new_value ) {
-		// Now we know that _some_ bits need to be erased to '1'.
-		
-		// Check if any bits in the new value are '0'.
-		if( new_value != 0xff ) {
-			// Now we know that some bits need to be programmed to '0' also.
-			
-			EEDR = new_value; // Set EEPROM data register.
-			EECR = (1<<EEMPE) | // Set Master Write Enable bit...
-			       (0<<EEPM1) | (0<<EEPM0); // ...and Erase+Write mode.
-			EECR |= (1<<EEPE);  // Start Erase+Write operation.
-		} else {
-			// Now we know that all bits should be erased.
+    EEARH = addr >> 8;
+    EEARL = addr & 0xff;
 
-			EECR = (1<<EEMPE) | // Set Master Write Enable bit...
-			       (1<<EEPM0);  // ...and Erase-only mode.
-			EECR |= (1<<EEPE);  // Start Erase-only operation.
-		}
-	} else {
-		// Now we know that _no_ bits need to be erased to '1'.
-		
-		// Check if any bits are changed from '1' in the old value.
-		if( diff_mask ) {
-			// Now we know that _some_ bits need to the programmed to '0'.
-			
-			EEDR = new_value;   // Set EEPROM data register.
-			EECR = (1<<EEMPE) | // Set Master Write Enable bit...
-			       (1<<EEPM1);  // ...and Write-only mode.
-			EECR |= (1<<EEPE);  // Start Write-only operation.
-		}
-	}
-	
-	sei(); // Restore interrupt flag state.
+    EEDR = new_value;
+
+    cli(); // Ensure atomic operation for the write operation.
+    // program mode
+    EECR = 0x04;
+    EECR = 0x02;
+
+    asm __volatile__ ("nop");
+    asm __volatile__ ("nop");
+    SREG = __bk_sreg;
+    sei(); // Restore interrupt flag state.
 }
 
+#ifdef USER_FLASH
+
+unsigned char flash_get_char( unsigned int addr )
+{
+	uint8_t *p ;
+	p = FLASH_30K_BASE_ADDR + addr;
+	return (uint8_t *)(p);
+}
+
+void flash_erase(void)
+{
+    EEAR = FLASH_30k_WRITE_ADDR;  // 写入最后1页/1K地址
+	EECR = 0x94;
+	EECR = 0x92;
+	__asm__ __volatile__ ("nop" ::);
+	__asm__ __volatile__ ("nop" ::);
+
+}
+
+void flash_put_char(unsigned int addr, unsigned charvalue)
+{
+    EEAR = FLASH_30k_WRITE_ADDR + addr&0x3;
+	switch (addr%4) {
+		case 0：
+			E2PD0 = new_value;
+			E2PD1 = 0;
+			E2PD2 = 0;
+			E2PD3 = 0;
+			break;
+
+		case 1:
+			E2PD0 = 0;
+			E2PD1 = new_value;
+			E2PD2 = 0;
+			E2PD3 = 0;
+			break;
+		case 2:
+			E2PD0 = 0;
+			E2PD1 = 0;
+			E2PD2 = new_value;
+			E2PD3 = 0;
+			break;
+			break;
+		case 3:
+			E2PD0 = 0;
+			E2PD1 = 0;
+			E2PD2 = 0;
+			E2PD3 = new_value;
+			break;
+	}
+    EECR = 0xA4;   // 编程使能
+    EECR = 0xA2;   // 启动编程
+	__asm__ __volatile__ ("nop" ::);
+	__asm__ __volatile__ ("nop" ::);
+}
+
+void flash_write_byte(unsigned int addr, uint8_t *pData, uint16_t length)
+{
+	uint16_t i;
+	flash_erase();
+    for (i = 0; i < length/4; i += 4) 
+    {
+        EEAR = FLASH_30k_WRITE_ADDR + addr&0x3 + i;
+		E2PD0 = *pData;
+		E2PD1 = *(pData+1);
+		E2PD2 = *(pData+2);
+		E2PD3 = *(pData+3);
+        cli();
+    	EECR = 0xA0;    // 写FLASH模式
+    	EECR |= 0x04;   // 编程使能
+   	 	EECR |= 0x02;   // 启动编程
+		__asm__ __volatile__ ("nop" ::);
+		__asm__ __volatile__ ("nop" ::);
+    }
+	if (length%4)
+	{
+		EEAR = FLASH_30k_WRITE_ADDR + addr&0x3 + i;
+		E2PD0 = *pData;
+		E2PD1 = (length%4 == 2)? *(pData+1):0;
+		E2PD2 = (length%4 == 3)? *(pData+2):0;
+		E2PD3 = 0;
+        cli();
+    	EECR = 0xA0;    // 写FLASH模式
+    	EECR |= 0x04;   // 编程使能
+   	 	EECR |= 0x02;   // 启动编程
+		__asm__ __volatile__ ("nop" ::);
+		__asm__ __volatile__ ("nop" ::);
+	}
+}
+#endif
+
+
 // Extensions added as part of Grbl 
-
-
 void memcpy_to_eeprom_with_checksum(unsigned int destination, char *source, unsigned int size) {
   unsigned char checksum = 0;
+#ifdef USER_FLASH
+  flash_write_4byte(unsigned int destination, char *source, unsigned int size);
+#endif
   for(; size > 0; size--) { 
     checksum = (checksum << 1) || (checksum >> 7);
     checksum += *source;
-    eeprom_put_char(destination++, *(source++)); 
+
+#ifndef USER_FLASH
+   eeprom_put_char(destination, *(source++));
+#endif
+	destination++;
   }
+#ifdef USER_FLASH
+  flash_put_char(destination, checksum);
+#else
   eeprom_put_char(destination, checksum);
+#endif
+  
+
 }
 
 int memcpy_from_eeprom_with_checksum(char *destination, unsigned int source, unsigned int size) {
   unsigned char data, checksum = 0;
-  for(; size > 0; size--) { 
-    data = eeprom_get_char(source++);
+  for(; size > 0; size--) {
+#ifdef USER_FLASH
+    data = flash_get_char();
+#else
+	eeprom_get_char(source++);
+#endif 
+
     checksum = (checksum << 1) || (checksum >> 7);
     checksum += data;    
     *(destination++) = data; 
   }
-  return(checksum == eeprom_get_char(source));
+#ifdef USER_FLASH
+    return(checksum == flash_get_char(source));
+#else
+	return(checksum == eeprom_get_char(source));
+#endif 
+
 }
 
 // end of file

@@ -25,8 +25,8 @@
 #include <avr/interrupt.h>
 
 #ifdef USER_FLASH
-#define FLASH_30K_READ_ADDR 0xB600  // 30kÎ»ÖÃÓÃÀ´´æ·ÅÊı¾İ ÔÚ´æ´¢¿Õ¼äµÄÓ³ÉäµØÖ·
-#define FLASH_30k_WRITE_ADDR 0x7800 // 30kÔÚflashÖĞµÄÎïÀíµØÖ·
+#define FLASH_30K_READ_ADDR 0xB600  // 30kä½ç½®ç”¨æ¥å­˜æ”¾æ•°æ® åœ¨å­˜å‚¨ç©ºé—´çš„æ˜ å°„åœ°å€
+#define FLASH_30k_WRITE_ADDR 0x7800 // 30kåœ¨flashä¸­çš„ç‰©ç†åœ°å€
 #endif
 
 /* These EEPROM bits have different names on different devices. */
@@ -110,7 +110,7 @@ unsigned char flash_get_char( unsigned int addr )
 
 void flash_erase(void)
 {
-    EEAR = FLASH_30k_WRITE_ADDR;  // Ğ´Èë×îºó1Ò³/1KµØÖ·
+    EEAR = FLASH_30k_WRITE_ADDR;  // å†™å…¥æœ€å1é¡µ/1Kåœ°å€
 	EECR = 0x94;
 	EECR = 0x92;
 	__asm__ __volatile__ ("nop" ::);
@@ -122,7 +122,7 @@ void flash_put_char(unsigned int addr, unsigned charvalue)
 {
     EEAR = FLASH_30k_WRITE_ADDR + addr&0x3;
 	switch (addr%4) {
-		case 0£º
+		case 0ï¼š
 			E2PD0 = new_value;
 			E2PD1 = 0;
 			E2PD2 = 0;
@@ -149,8 +149,8 @@ void flash_put_char(unsigned int addr, unsigned charvalue)
 			E2PD3 = new_value;
 			break;
 	}
-    EECR = 0xA4;   // ±à³ÌÊ¹ÄÜ
-    EECR = 0xA2;   // Æô¶¯±à³Ì
+    EECR = 0xA4;   // ç¼–ç¨‹ä½¿èƒ½
+    EECR = 0xA2;   // å¯åŠ¨ç¼–ç¨‹
 	__asm__ __volatile__ ("nop" ::);
 	__asm__ __volatile__ ("nop" ::);
 }
@@ -167,9 +167,9 @@ void flash_write_byte(unsigned int addr, uint8_t *pData, uint16_t length)
 		E2PD2 = *(pData+2);
 		E2PD3 = *(pData+3);
         cli();
-    	EECR = 0xA0;    // Ğ´FLASHÄ£Ê½
-    	EECR |= 0x04;   // ±à³ÌÊ¹ÄÜ
-   	 	EECR |= 0x02;   // Æô¶¯±à³Ì
+    	EECR = 0xA0;    // å†™FLASHæ¨¡å¼
+    	EECR |= 0x04;   // ç¼–ç¨‹ä½¿èƒ½
+   	 	EECR |= 0x02;   // å¯åŠ¨ç¼–ç¨‹
 		__asm__ __volatile__ ("nop" ::);
 		__asm__ __volatile__ ("nop" ::);
     }
@@ -181,9 +181,9 @@ void flash_write_byte(unsigned int addr, uint8_t *pData, uint16_t length)
 		E2PD2 = (length%4 == 3)? *(pData+2):0;
 		E2PD3 = 0;
         cli();
-    	EECR = 0xA0;    // Ğ´FLASHÄ£Ê½
-    	EECR |= 0x04;   // ±à³ÌÊ¹ÄÜ
-   	 	EECR |= 0x02;   // Æô¶¯±à³Ì
+    	EECR = 0xA0;    // å†™FLASHæ¨¡å¼
+    	EECR |= 0x04;   // ç¼–ç¨‹ä½¿èƒ½
+   	 	EECR |= 0x02;   // å¯åŠ¨ç¼–ç¨‹
 		__asm__ __volatile__ ("nop" ::);
 		__asm__ __volatile__ ("nop" ::);
 	}
@@ -221,7 +221,7 @@ int memcpy_from_eeprom_with_checksum(char *destination, unsigned int source, uns
 #ifdef USER_FLASH
     data = flash_get_char();
 #else
-	eeprom_get_char(source++);
+    data = eeprom_get_char(source++);
 #endif 
 
     checksum = (checksum << 1) || (checksum >> 7);

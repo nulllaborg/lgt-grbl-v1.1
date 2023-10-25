@@ -36,10 +36,15 @@ git clone https://github.com/nulllaborg/lgt-grbl-v1.1
 
 确保您的电路板已在Tool->开发板菜单中设置为DIY Board
 CPU Frequency -> 16M
+
 Clock Source  -> Exteral 16M
+
 EEROM Size    -> 0K
+
 Upload Speed  -> 115200
+
 Variant       -> LQFP32
+
 点击项目->使用编程器上传到你的LGT8F328P芯片中！（不要直接使用上传工具，必须要用编程器上传grbl）
 高级用户：大多数用户使用Grbl的默认程序就足够了，但您可以通过编辑Arduino库（而不是下载）文件夹中的config.h文件来自定义Grbl。该文件启用或禁用所有Grbl的附加编译时选项。 文件中有他们功能描述。 编辑并保存后，只需按照上述步骤即可刷您的自定义Grbl程序！
 
